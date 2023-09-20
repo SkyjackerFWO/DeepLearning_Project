@@ -7,6 +7,7 @@ from torchvision.datasets import MNIST
 from torchvision.transforms import Compose, ToTensor, Normalize, Lambda
 from torch.utils.data import DataLoader
 
+torch.cuda.empty_cache()
 
 def MNIST_loaders(train_batch_size=50000, test_batch_size=10000):
 
@@ -36,7 +37,7 @@ def overlay_y_on_x(x, y):
     x_ = x.clone()
     x_[:, :10] *= 0.0
     x_[range(x.shape[0]), y] = x.max()
-    return x_
+    return x_.cuda()
 
 
 class Net(torch.nn.Module):
@@ -121,10 +122,10 @@ if __name__ == "__main__":
         visualize_sample(data, name)
     
     net.train(x_pos, x_neg)
+    with torch.no_grad():
+        print('train error:', 1.0 - net.predict(x).eq(y).float().mean().item())
 
-    print('train error:', 1.0 - net.predict(x).eq(y).float().mean().item())
+        x_te, y_te = next(iter(test_loader))
+        x_te, y_te = x_te.cuda(), y_te.cuda()
 
-    x_te, y_te = next(iter(test_loader))
-    x_te, y_te = x_te.cuda(), y_te.cuda()
-
-    print('test error:', 1.0 - net.predict(x_te).eq(y_te).float().mean().item())
+        print('test error:', 1.0 - net.predict(x_te).eq(y_te).float().mean().item())
