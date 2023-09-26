@@ -7,6 +7,7 @@ from torchvision.datasets import MNIST
 from torchvision.transforms import Compose, ToTensor, Normalize, Lambda
 from torch.utils.data import DataLoader
 
+from utils import MNIST_loaders
 torch.cuda.empty_cache()
 
 def MNIST_loaders(train_batch_size=50000, test_batch_size=10000):
@@ -74,7 +75,7 @@ class Layer(nn.Linear):
         self.relu = torch.nn.ReLU()
         self.opt = Adam(self.parameters(), lr=0.03)
         self.threshold = 2.0
-        self.num_epochs = 1000
+        self.num_epochs = 500
 
     def forward(self, x):
         x_direction = x / (x.norm(2, 1, keepdim=True) + 1e-4)
@@ -129,3 +130,5 @@ if __name__ == "__main__":
         x_te, y_te = x_te.cuda(), y_te.cuda()
 
         print('test error:', 1.0 - net.predict(x_te).eq(y_te).float().mean().item())
+        
+        
