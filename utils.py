@@ -14,7 +14,8 @@ def MNIST_loaders(train_batch_size=50000, test_batch_size=50000):
     transform = Compose([
         ToTensor(),
         Normalize((0.1307,), (0.3081,)),
-        Lambda(lambda x: torch.flatten(x))])
+        # Lambda(lambda x: torch.flatten(x))
+        ])
 
     train_loader = DataLoader(
         MNIST('./data/', train=True,
