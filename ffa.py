@@ -7,7 +7,7 @@ from torchvision.datasets import MNIST
 from torchvision.transforms import Compose, ToTensor, Normalize, Lambda
 from torch.utils.data import DataLoader
 
-from utils import MNIST_loaders
+from utils import MNIST_loaders, save_model
 torch.cuda.empty_cache()
 
 def MNIST_loaders(train_batch_size=50000, test_batch_size=10000):

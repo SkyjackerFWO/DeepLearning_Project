@@ -1,66 +1,30 @@
 import torch
+import torchvision
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
 from torchvision.datasets import MNIST
 from torchvision.transforms import Compose, ToTensor, Normalize
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-from torch.autograd import Variable
-from utils import MNIST_loaders
+from utils import MNIST_loaders, save_model
+writer = SummaryWriter('runs/cnn_mnist')
 
-# # Các siêu tham số
-# BATCH_SIZE = 500
-# N_STEPS = 28
-# N_INPUTS = 28
-# N_NEURONS = 128
-# N_OUTPUTS = 10
-# NUM_EPOCHS = 5
-# LEARNING_RATE = 0.001
-
+save_path = 'weights/cnn_mnist'
 sequence_length = 28
 input_size = 28
 hidden_size = 128
 num_layers = 2
 num_classes = 10
 batch_size = 100
-num_epochs = 20
-learning_rate = 0.01
+num_epochs = 50
+learning_rate = 0.001
 
-# # Chuẩn bị dữ liệu
-# transform = Compose([ToTensor(), Normalize((0.5,), (0.5,))])
-# train_dataset = MNIST(root='./data', train=True, transform=transform, download=True)
-# train_loader = DataLoader(dataset=train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-# test_dataset = MNIST(root='./data', train=False, transform=transform, download=True)
-# test_loader = DataLoader(dataset=test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
-# # Định nghĩa mô hình LSTM
-# class ImageLSTM(nn.Module):
-#     def __init__(self, batch_size, n_steps, n_inputs, n_neurons, n_outputs):
-#         super(ImageLSTM, self).__init__()
-#         self.n_neurons = n_neurons
-#         self.batch_size = batch_size
-#         self.n_steps = n_steps
-#         self.n_inputs = n_inputs
-#         self.n_outputs = n_outputs
-#         self.lstm = nn.LSTM(self.n_inputs, self.n_neurons, batch_first=True)
-#         self.FC = nn.Linear(self.n_neurons, self.n_outputs)
 
-#     def forward(self, X):
-#         X = X.view(-1, self.n_steps, self.n_inputs)
-#         self.batch_size = X.size(0)
-#         self.hidden, self.cell_state = self.init_hidden()
-#         lstm_out, (self.hidden, self.cell_state) = self.lstm(X, (self.hidden, self.cell_state))
-#         out = self.FC(self.hidden)
-#         return out.view(-1, self.n_outputs)
-
-#     def init_hidden(self):
-#         return (torch.zeros(1, self.batch_size, self.n_neurons),
-#                 torch.zeros(1, self.batch_size, self.n_neurons))
-
-    
 class CNN(nn.Module):
     def __init__(self, num_classes):
         super(CNN, self).__init__()
@@ -91,10 +55,11 @@ class CNN(nn.Module):
 # Khởi tạo mô hình và bộ tối ưu hóa
 model = CNN(num_classes).to(device)
 loss_func = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr = 0.01)   
+optimizer = optim.Adam(model.parameters(), lr = learning_rate)   
 
 torch.manual_seed(1234)
 train_loader, test_loader = MNIST_loaders(batch_size,batch_size)
+
 
 # Hàm tính độ chính xác
 def get_accuracy(logit, target, batch_size):
@@ -103,6 +68,9 @@ def get_accuracy(logit, target, batch_size):
     return accuracy.item()
 
 # Vòng lặp huấn luyện
+running_loss = 0
+best_loss = 0
+
 for epoch in range(num_epochs):
     total_step = len(train_loader)
     model.train()
@@ -114,9 +82,16 @@ for epoch in range(num_epochs):
         output = model(images)
         loss = F.nll_loss(output, labels) 
         loss.backward()
-        optimizer.step()              
-    print ('Epoch [{}/{}],  Loss: {:.4f}' 
-                .format(epoch + 1, num_epochs, loss.item()))        
+        optimizer.step()
+        running_loss += loss.item()
+    avg_loss = running_loss / len(train_loader)
+    writer.add_scalar('training loss',
+                    avg_loss,
+                    epoch)
+    best_loss = save_model(model, optimizer, epoch, best_loss, avg_loss, save_path)
+    print ('Epoch [{}/{}],  Loss: {:.4f}, Best loss: {:.4f}' 
+                .format(epoch + 1, num_epochs, avg_loss, best_loss))
+    running_loss = 0.0        
 # Test the model
 # model.eval()
 # with torch.no_grad():
