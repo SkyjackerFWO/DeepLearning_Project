@@ -7,10 +7,12 @@ from torchvision.transforms import Compose, ToTensor, Normalize, Lambda
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import matplotlib.pyplot as plt
+from utils import MNIST_loaders, save_model
 
 torch.cuda.empty_cache()
 
 def MNIST_loaders(train_batch_size=50000, test_batch_size=10000):
+    
     transform = Compose([
         ToTensor(),
         Normalize((0.1307,), (0.3081,)),
@@ -33,6 +35,8 @@ def MNIST_loaders(train_batch_size=50000, test_batch_size=10000):
 
 
 def overlay_y_on_x(x, y):
+    """Replace the first 10 pixels of data [x] with one-hot-encoded label [y]
+    """
     x_ = x.clone()
     x_[:, :10] *= 0.0
     x_[range(x.shape[0]), y] = x.max()
@@ -85,10 +89,14 @@ class Layer(nn.Linear):
         for i in tqdm(range(self.num_epochs)):
             g_pos = self.forward(x_pos).pow(2).mean(1)
             g_neg = self.forward(x_neg).pow(2).mean(1)
+            # The following loss pushes pos (neg) samples to
+            # values larger (smaller) than the self.threshold.
             loss = torch.log(1 + torch.exp(torch.cat([
                 -g_pos + self.threshold,
                 g_neg - self.threshold]))).mean()
             self.opt.zero_grad()
+            # this backward just compute the derivative and hence
+            # is not considered backpropagation.
             loss.backward()
             self.opt.step()
         return self.forward(x_pos).detach(), self.forward(x_neg).detach()
