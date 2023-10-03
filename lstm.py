@@ -10,9 +10,16 @@ import matplotlib.pyplot as plt
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-from utils import MNIST_loaders, save_model
+import os
+from utils import MNIST_loaders, save_model  # Make sure 'utils.py' is available with these functions
 
-writer = SummaryWriter('runs/lstm_mnist_1')
+# Create a directory to store the TensorBoard logs and model weights
+if not os.path.exists('runs'):
+    os.makedirs('runs')
+if not os.path.exists('weights'):
+    os.makedirs('weights')
+
+writer = SummaryWriter('runs/lstm_mnist')
 
 save_path = 'weights/lstm_mnist'
 sequence_length = 28
@@ -24,57 +31,45 @@ batch_size = 100
 num_epochs = 50
 learning_rate = 0.001
 
-
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
 class ImageLSTM(nn.Module):
-    
     def __init__(self, input_size, hidden_size, num_layers, num_classes):
         super(ImageLSTM, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
         self.fc = nn.Linear(hidden_size, num_classes)
-        pass
-    
+
     def forward(self, x):
-        # Set initial hidden and cell states 
-        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device) 
+        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device)
         c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device)
-        # Passing in the input and hidden state into the model and  obtaining outputs
-        out, hidden = self.lstm(x, (h0, c0))  # out: tensor of shape (batch_size, seq_length, hidden_size)
-        
-        #Reshaping the outputs such that it can be fit into the fully connected layer
+        out, hidden = self.lstm(x, (h0, c0))
         out = self.fc(out[:, -1, :])
         return out
-    
-##################################################################################################################
 
-# Khởi tạo mô hình và bộ tối ưu hóa
+# Initialize the model and optimizer
 model = ImageLSTM(input_size, hidden_size, num_layers, num_classes).to(device)
 loss_func = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr = learning_rate)   
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 torch.manual_seed(1234)
-train_loader, test_loader = MNIST_loaders(batch_size,batch_size)
-classes = ('0','1','2','3','4','5','6','7','8','9')
-     
-# Hàm tính độ chính xác
+train_loader, test_loader = MNIST_loaders(batch_size, batch_size)
+
+# Function to calculate accuracy
 def get_accuracy(logit, target, batch_size):
     corrects = (torch.max(logit, 1)[1].view(target.size()).data == target.data).sum()
     accuracy = 100.0 * corrects / batch_size
     return accuracy.item()
 
-
+# Visualize images in TensorBoard
 images, labels = next(iter(train_loader))
 grid = torchvision.utils.make_grid(images)
 writer.add_image('images', grid)
 images = images.reshape(-1, sequence_length, input_size).to(device)
-writer.add_graph(model,images)
+writer.add_graph(model, images)
 
-
-# Vòng lặp huấn luyện
+# Training loop
 running_loss = 0
 best_loss = 0
 for epoch in range(num_epochs):
@@ -88,36 +83,35 @@ for epoch in range(num_epochs):
         # Forward pass
         outputs = model(images)
         loss = loss_func(outputs, labels)
-        
+
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        # train_running_loss += loss.detach().item()
-        # train_acc += get_accuracy(outputs, labels, batch_size)
         running_loss += loss.item()
+
     avg_loss = running_loss / len(train_loader)
-    writer.add_scalar('training loss',
-                    avg_loss,
-                    epoch)
-    
-    print ('Epoch [{}/{}],  Loss: {:.4f}, Best loss: {:.4f}' 
-                .format(epoch + 1, num_epochs, avg_loss, best_loss))
+    writer.add_scalar('training loss', avg_loss, epoch)
+
+    # Calculate accuracy
+    model.eval()
+    with torch.no_grad():
+        correct = 0
+        total = 0
+        for images, labels in test_loader:
+            images = images.reshape(-1, sequence_length, input_size).to(device)
+            labels = labels.to(device)
+            outputs = model(images)
+            _, predicted = torch.max(outputs.data, 1)
+            total = total + labels.size(0)
+            correct = correct + (predicted == labels).sum().item()
+
+        accuracy = 100 * correct / total
+        writer.add_scalar('accuracy', accuracy, epoch)
+
+    print('Epoch [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%, Best loss: {:.4f}'.format(epoch + 1, num_epochs, avg_loss, accuracy, best_loss))
     best_loss = save_model(model, optimizer, epoch, best_loss, avg_loss, save_path)
     running_loss = 0.0
 
-    
-# Test the model
-model.eval()
-with torch.no_grad():
-    correct = 0
-    total = 0
-    for images, labels in test_loader:
-        images = images.reshape(-1, sequence_length, input_size).to(device)
-        labels = labels.to(device)
-        outputs = model(images)
-        _, predicted = torch.max(outputs.data, 1)
-        total = total + labels.size(0)
-        correct = correct + (predicted == labels).sum().item()
-print('Test Accuracy of the model on the 10000 test images: {} %'.format(100 * correct / total))
 
-
+# Close the TensorBoard writer
+writer.close()
