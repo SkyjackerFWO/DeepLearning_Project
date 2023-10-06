@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 from tqdm import tqdm
@@ -5,19 +6,16 @@ from torch.optim import Adam
 from torchvision.datasets import MNIST
 from torchvision.transforms import Compose, ToTensor, Normalize, Lambda
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
-import matplotlib.pyplot as plt
-from utils import MNIST_loaders, save_model
 
+from utils import MNIST_loaders, save_model
 torch.cuda.empty_cache()
 
 def MNIST_loaders(train_batch_size=50000, test_batch_size=10000):
-    
+
     transform = Compose([
         ToTensor(),
         Normalize((0.1307,), (0.3081,)),
-        Lambda(lambda x: torch.flatten(x))
-    ])
+        Lambda(lambda x: torch.flatten(x))])
 
     train_loader = DataLoader(
         MNIST('./data/', train=True,
@@ -104,7 +102,7 @@ class Layer(nn.Linear):
     
 def visualize_sample(data, name='', idx=0):
     reshaped = data[idx].cpu().reshape(28, 28)
-    plt.figure(figsize=(4, 4))
+    plt.figure(figsize = (4, 4))
     plt.title(name)
     plt.imshow(reshaped, cmap="gray")
     plt.show()
@@ -120,26 +118,17 @@ if __name__ == "__main__":
     x_pos = overlay_y_on_x(x, y)
     rnd = torch.randperm(x.size(0))
     x_neg = overlay_y_on_x(x, y[rnd])
-
-    writer = SummaryWriter('runs/ffa_mnist')  # Khởi tạo TensorBoard writer
-
+    
     for data, name in zip([x, x_pos, x_neg], ['orig', 'pos', 'neg']):
         visualize_sample(data, name)
-
-    # Huấn luyện mô hình và ghi log vào TensorBoard
+    
     net.train(x_pos, x_neg)
     with torch.no_grad():
-        train_accuracy = 1.0 - net.predict(x).eq(y).float().mean().item()
-        print('Train error:', train_accuracy)
+        print('train error:', 1.0 - net.predict(x).eq(y).float().mean().item())
 
         x_te, y_te = next(iter(test_loader))
         x_te, y_te = x_te.cuda(), y_te.cuda()
-        test_accuracy = 1.0 - net.predict(x_te).eq(y_te).float().mean().item()
-        print('Test error:', test_accuracy)
 
-    # Ghi log về train và test accuracy vào TensorBoard
-    writer.add_scalar('Train Accuracy', 1.0 - train_accuracy)
-    writer.add_scalar('Test Accuracy', 1.0 - test_accuracy)
-
-    # Đóng writer
-    writer.close()
+        print('test error:', 1.0 - net.predict(x_te).eq(y_te).float().mean().item())
+        
+        
